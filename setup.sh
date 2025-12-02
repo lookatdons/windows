@@ -2,7 +2,6 @@
 
 # Windows Server 2022 Auto-Installer Script
 # WARNING: This will WIPE your entire disk and install Windows
-# Make sure you have backups before proceeding!
 
 set -e
 
@@ -13,39 +12,55 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-IMAGE_URL="https://eu2.vpssh.xyz/Windows_Server_2022_VirtIO_Intel.gz"
-RDP_PASSWORD="${1:-Administrator}"  # Can be passed as argument
+# Configuration - Choose your image source
+USE_SOURCE="${1:-1}"  # Pass 1 or 2 as argument, default is 1
 
-echo -e "${BLUE}================================${NC}"
-echo -e "${BLUE}Windows Server 2022 Installer${NC}"
-echo -e "${BLUE}================================${NC}"
+if [ "$USE_SOURCE" = "1" ]; then
+    IMAGE_URL="https://fr1.teddyvps.com/iso/en-us_win2022.gz"
+    IMAGE_TYPE="gz"
+    IMAGE_NAME="TeddyVPS Windows Server 2022"
+    DEFAULT_USER="Administrator"
+    DEFAULT_PASS="Teddysun.com"
+elif [ "$USE_SOURCE" = "2" ]; then
+    IMAGE_URL="https://dl.lamp.sh/vhd/en-us_win2022_uefi.xz"
+    IMAGE_TYPE="xz"
+    IMAGE_NAME="Lamp.sh Windows Server 2022 UEFI"
+    DEFAULT_USER="Administrator"
+    DEFAULT_PASS="Teddysun.com"
+else
+    printf "${RED}Invalid source. Use: $0 1 (TeddyVPS) or $0 2 (Lamp.sh)${NC}\n"
+    exit 1
+fi
+
+printf "${BLUE}================================${NC}\n"
+printf "${BLUE}Windows Server 2022 Installer${NC}\n"
+printf "${BLUE}================================${NC}\n"
+printf "${GREEN}Image: %s${NC}\n" "$IMAGE_NAME"
 echo ""
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}ERROR: Please run as root (use sudo)${NC}"
+    printf "${RED}ERROR: Please run as root (use sudo)${NC}\n"
     exit 1
 fi
 
 # Display warning
-echo -e "${RED}⚠️  WARNING ⚠️${NC}"
-echo -e "${YELLOW}This script will:${NC}"
-echo -e "${YELLOW}- COMPLETELY WIPE your current Ubuntu system${NC}"
-echo -e "${YELLOW}- Install Windows Server 2022${NC}"
-echo -e "${YELLOW}- All current data will be PERMANENTLY DELETED${NC}"
+printf "${RED}⚠️  WARNING ⚠️${NC}\n"
+printf "${YELLOW}This script will:${NC}\n"
+printf "${YELLOW}- COMPLETELY WIPE your current Ubuntu system${NC}\n"
+printf "${YELLOW}- Install Windows Server 2022${NC}\n"
+printf "${YELLOW}- All current data will be PERMANENTLY DELETED${NC}\n"
 echo ""
-echo -e "Press ${GREEN}CTRL+C${NC} within 15 seconds to cancel..."
+printf "Press ${GREEN}CTRL+C${NC} within 15 seconds to cancel...\n"
 echo ""
 
 for i in {15..1}; do
-    echo -ne "\r${YELLOW}Starting in $i seconds... ${NC}"
+    printf "\r${YELLOW}Starting in %d seconds... ${NC}" "$i"
     sleep 1
 done
-echo ""
+printf "\n\n"
 
-echo ""
-echo -e "${GREEN}[1/5] Detecting system configuration...${NC}"
+printf "${GREEN}[1/6] Detecting system configuration...${NC}\n"
 
 # Detect network interface
 INTERFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
@@ -53,25 +68,23 @@ IPADDR=$(ip addr show $INTERFACE | grep "inet " | awk '{print $2}' | cut -d/ -f1
 GATEWAY=$(ip route | grep default | awk '{print $3}' | head -n1)
 NETMASK=$(ip addr show $INTERFACE | grep "inet " | awk '{print $2}' | cut -d/ -f2 | head -n1)
 
-# Get DNS servers
-DNS1=$(grep nameserver /etc/resolv.conf | head -n1 | awk '{print $2}')
-DNS2=$(grep nameserver /etc/resolv.conf | sed -n '2p' | awk '{print $2}')
-[ -z "$DNS2" ] && DNS2="8.8.8.8"
-
 echo "  ✓ Network Interface: $INTERFACE"
 echo "  ✓ IP Address: $IPADDR/$NETMASK"
 echo "  ✓ Gateway: $GATEWAY"
-echo "  ✓ DNS: $DNS1, $DNS2"
 
-echo ""
-echo -e "${GREEN}[2/5] Installing required packages...${NC}"
+printf "\n${GREEN}[2/6] Installing required packages...${NC}\n"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq > /dev/null 2>&1
-apt-get install -y wget curl gzip coreutils > /dev/null 2>&1
-echo "  ✓ Packages installed"
 
-echo ""
-echo -e "${GREEN}[3/5] Detecting target disk...${NC}"
+if [ "$IMAGE_TYPE" = "xz" ]; then
+    apt-get install -y wget curl xz-utils > /dev/null 2>&1
+    echo "  ✓ Packages installed (wget, curl, xz-utils)"
+else
+    apt-get install -y wget curl gzip > /dev/null 2>&1
+    echo "  ✓ Packages installed (wget, curl, gzip)"
+fi
+
+printf "\n${GREEN}[3/6] Detecting target disk...${NC}\n"
 
 # Detect primary disk
 DISK=$(lsblk -ndo NAME,TYPE | grep disk | head -n1 | awk '{print $1}')
@@ -81,69 +94,98 @@ DISK_SIZE=$(lsblk -ndo SIZE $DISK_PATH)
 echo "  ✓ Target disk: $DISK_PATH"
 echo "  ✓ Disk size: $DISK_SIZE"
 
-# Confirm disk
-echo ""
-echo -e "${YELLOW}About to write to $DISK_PATH - This will destroy all data!${NC}"
-echo -e "${YELLOW}Press CTRL+C within 5 seconds to cancel...${NC}"
+printf "\n${YELLOW}About to write to %s - This will destroy all data!${NC}\n" "$DISK_PATH"
+printf "${YELLOW}Press CTRL+C within 5 seconds to cancel...${NC}\n"
 sleep 5
 
-echo ""
-echo -e "${GREEN}[4/5] Downloading and writing Windows Server 2022 image...${NC}"
-echo -e "${BLUE}This will take 10-30 minutes depending on connection speed${NC}"
-echo -e "${BLUE}Image source: ${IMAGE_URL}${NC}"
-echo ""
-
-# Download and write image directly to disk
-echo "  → Downloading and writing image..."
-if wget --no-check-certificate --progress=bar:force -O- "$IMAGE_URL" 2>&1 | stdbuf -oL tr '\r' '\n' | grep --line-buffered -oP '\d+%' | while read -r percent; do
-    echo -ne "\r  Progress: $percent"
-done | gunzip | dd of=$DISK_PATH bs=4M status=progress oflag=direct; then
-    echo ""
-    echo "  ✓ Image written successfully"
+printf "\n${GREEN}[4/6] Testing image URL...${NC}\n"
+if curl -sI "$IMAGE_URL" | grep -q "200"; then
+    echo "  ✓ Image URL is accessible"
 else
-    echo ""
-    echo -e "${RED}  ✗ Failed to download or write image${NC}"
+    printf "${RED}  ✗ Cannot access image URL${NC}\n"
     exit 1
 fi
 
+printf "\n${GREEN}[5/6] Downloading and writing Windows image...${NC}\n"
+printf "${BLUE}This will take 10-40 minutes depending on connection${NC}\n"
+printf "${BLUE}Source: %s${NC}\n" "$IMAGE_URL"
+echo ""
+
+# Download and write directly to disk
+echo "  → Downloading and writing to $DISK_PATH..."
+
+if [ "$IMAGE_TYPE" = "xz" ]; then
+    # For .xz compressed images
+    if wget --no-check-certificate --show-progress -O- "$IMAGE_URL" 2>&1 | \
+       tee >(grep --line-buffered -oP '\d+%' >&2) | \
+       xz -d | dd of="$DISK_PATH" bs=4M status=none oflag=direct; then
+        printf "\n  ✓ Image written successfully\n"
+    else
+        printf "\n${RED}  ✗ Download/write failed${NC}\n"
+        exit 1
+    fi
+else
+    # For .gz compressed images
+    if wget --no-check-certificate --show-progress -O- "$IMAGE_URL" 2>&1 | \
+       tee >(grep --line-buffered -oP '\d+%' >&2) | \
+       gunzip | dd of="$DISK_PATH" bs=4M status=none oflag=direct; then
+        printf "\n  ✓ Image written successfully\n"
+    else
+        printf "\n${RED}  ✗ Download/write failed${NC}\n"
+        exit 1
+    fi
+fi
+
 # Sync to ensure all data is written
+printf "\n${GREEN}[6/6] Finalizing installation...${NC}\n"
 sync
-echo "  ✓ Syncing disk..."
+echo "  ✓ Syncing disk buffers..."
+sleep 2
+echo "  ✓ Flushing cache..."
+echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+echo "  ✓ Installation complete!"
 
 echo ""
-echo -e "${GREEN}[5/5] Installation complete!${NC}"
-
+printf "${BLUE}================================${NC}\n"
+printf "${GREEN}✓ Windows Server 2022 Installed${NC}\n"
+printf "${BLUE}================================${NC}\n"
 echo ""
-echo -e "${BLUE}================================${NC}"
-echo -e "${GREEN}✓ Windows Server 2022 Installed${NC}"
-echo -e "${BLUE}================================${NC}"
+printf "${YELLOW}Connection Information:${NC}\n"
+printf "  • IP Address: ${GREEN}%s${NC}\n" "$IPADDR"
+printf "  • RDP Port: ${GREEN}%s${NC}\n" "3389"
+printf "  • Username: ${GREEN}%s${NC}\n" "$DEFAULT_USER"
+printf "  • Password: ${GREEN}%s${NC}\n" "$DEFAULT_PASS"
 echo ""
-echo -e "${YELLOW}Connection Information:${NC}"
-echo "  • IP Address: ${GREEN}$IPADDR${NC}"
-echo "  • RDP Port: ${GREEN}3389${NC}"
-echo "  • Username: ${GREEN}Administrator${NC}"
-echo "  • Password: ${GREEN}(Check image documentation)${NC}"
-echo ""
-echo -e "${YELLOW}Next Steps:${NC}"
+printf "${YELLOW}Next Steps:${NC}\n"
 echo "  1. System will reboot in 10 seconds"
-echo "  2. Wait 3-5 minutes for Windows to boot"
-echo "  3. Connect via RDP to: $IPADDR:3389"
-echo "  4. Login with Administrator credentials"
+echo "  2. SSH connection will be lost"
+echo "  3. Wait 5-10 minutes for Windows first boot"
+echo "  4. Connect via RDP client to: $IPADDR:3389"
+echo "  5. Login with credentials above"
 echo ""
-echo -e "${RED}IMPORTANT NOTES:${NC}"
-echo "  • This is a pre-configured image - credentials may vary"
-echo "  • Change Administrator password immediately after login"
-echo "  • Check image provider documentation for default credentials"
-echo "  • Network settings should be automatically configured"
+printf "${RED}IMPORTANT SECURITY:${NC}\n"
+printf "  ${RED}• CHANGE PASSWORD IMMEDIATELY after first login!${NC}\n"
+printf "  ${RED}• Default password is publicly known${NC}\n"
+printf "  ${RED}• Update Windows and enable firewall${NC}\n"
+echo ""
+printf "${YELLOW}Troubleshooting:${NC}\n"
+echo "  • If RDP doesn't work after 10 minutes:"
+echo "    - Check Upcloud console/VNC to see boot status"
+echo "    - Verify port 3389 is open: nmap -p 3389 $IPADDR"
+echo "    - Windows might need more time for first boot"
 echo ""
 
 # Countdown to reboot
-echo -e "${YELLOW}Rebooting to Windows...${NC}"
+printf "${YELLOW}Rebooting to Windows...${NC}\n"
 for i in {10..1}; do
-    echo -ne "\r  Rebooting in $i seconds... "
+    printf "\r  Rebooting in %d seconds... (CTRL+C to cancel) " "$i"
     sleep 1
 done
 
 echo ""
-echo -e "${GREEN}Rebooting now...${NC}"
-reboot
+printf "${GREEN}Initiating reboot...${NC}\n"
+sleep 1
+
+# Force reboot
+sync
+reboot -f
