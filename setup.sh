@@ -19,13 +19,20 @@ NC='\033[0m' # No Color
 USE_SOURCE="${1:-1}"  # Pass 1 or 2 as argument, default is 1
 
 if [ "$USE_SOURCE" = "1" ]; then
+    IMAGE_URL="https://eu2.vpssh.xyz/Windows_Server_2022_VirtIO_Intel.gz"
+    IMAGE_TYPE="gz"
+    IMAGE_NAME="VPSSH Windows Server 2022 VirtIO"
+    IMAGE_SIZE="~4-5 GB"
+    DEFAULT_USER="Administrator"
+    DEFAULT_PASS="(Check image documentation)"
+elif [ "$USE_SOURCE" = "2" ]; then
     IMAGE_URL="https://fr1.teddyvps.com/iso/en-us_win2022.gz"
     IMAGE_TYPE="gz"
     IMAGE_NAME="TeddyVPS Windows Server 2022"
     IMAGE_SIZE="5.1 GB"
     DEFAULT_USER="Administrator"
     DEFAULT_PASS="Teddysun.com"
-elif [ "$USE_SOURCE" = "2" ]; then
+elif [ "$USE_SOURCE" = "3" ]; then
     IMAGE_URL="https://dl.lamp.sh/vhd/en-us_win2022_uefi.xz"
     IMAGE_TYPE="xz"
     IMAGE_NAME="Lamp.sh Windows Server 2022 UEFI"
@@ -34,8 +41,9 @@ elif [ "$USE_SOURCE" = "2" ]; then
     DEFAULT_PASS="Teddysun.com"
 else
     printf "${RED}Invalid source. Usage:${NC}\n"
-    printf "  bash $0 1  ${GREEN}# TeddyVPS (5.1 GB)${NC}\n"
-    printf "  bash $0 2  ${GREEN}# Lamp.sh (3.1 GB, faster)${NC}\n"
+    printf "  bash $0 1  ${GREEN}# VPSSH VirtIO (Recommended for KVM/Upcloud)${NC}\n"
+    printf "  bash $0 2  ${GREEN}# TeddyVPS (5.1 GB)${NC}\n"
+    printf "  bash $0 3  ${GREEN}# Lamp.sh (3.1 GB, UEFI only)${NC}\n"
     exit 1
 fi
 
@@ -76,13 +84,13 @@ if [ -d /sys/firmware/efi ]; then
     echo "  ✓ Boot mode: UEFI"
     
     # Warn if using BIOS image on UEFI system
-    if [ "$USE_SOURCE" = "1" ]; then
+    if [ "$USE_SOURCE" = "2" ]; then
         printf "${YELLOW}  ⚠ WARNING: TeddyVPS image may not work on UEFI systems${NC}\n"
-        printf "${YELLOW}  ⚠ Consider using option 2 (Lamp.sh UEFI) instead${NC}\n"
+        printf "${YELLOW}  ⚠ Consider using option 3 (Lamp.sh UEFI) instead${NC}\n"
         printf "${YELLOW}  Continue anyway? (y/N): ${NC}"
         read -r CONTINUE
         if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-            echo "  Installation cancelled. Run with option 2: bash $0 2"
+            echo "  Installation cancelled. Run with option 3: bash $0 3"
             exit 0
         fi
     fi
@@ -91,13 +99,13 @@ else
     echo "  ✓ Boot mode: Legacy BIOS"
     
     # Warn if using UEFI image on BIOS system
-    if [ "$USE_SOURCE" = "2" ]; then
+    if [ "$USE_SOURCE" = "3" ]; then
         printf "${YELLOW}  ⚠ WARNING: Lamp.sh UEFI image may not boot on Legacy BIOS systems${NC}\n"
-        printf "${YELLOW}  ⚠ Consider using option 1 (TeddyVPS) instead${NC}\n"
+        printf "${YELLOW}  ⚠ Consider using option 2 (TeddyVPS) instead${NC}\n"
         printf "${YELLOW}  Continue anyway? (y/N): ${NC}"
         read -r CONTINUE
         if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-            echo "  Installation cancelled. Run with option 1: bash $0 1"
+            echo "  Installation cancelled. Run with option 2: bash $0 2"
             exit 0
         fi
     fi
