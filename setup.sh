@@ -127,68 +127,85 @@ printf "${BLUE}Download size: %s${NC}\n" "$IMAGE_SIZE"
 printf "${BLUE}Estimated time: 10-40 minutes (depends on connection)${NC}\n"
 printf "${BLUE}Source: %s${NC}\n\n" "$IMAGE_URL"
 
-# Create a temporary fifo for progress monitoring
-FIFO="/tmp/download_progress_$$"
-mkfifo "$FIFO" || true
-
 # Download and write with visible progress
 echo "  → Starting download and disk write..."
 echo ""
 
 if [ "$IMAGE_TYPE" = "xz" ]; then
     # For .xz compressed images
-    printf "${YELLOW}  [DOWNLOAD] Fetching image...${NC}\n"
-    wget --no-check-certificate \
-         --progress=bar:force:noscroll \
-         --show-progress \
-         -O- "$IMAGE_URL" 2>&1 | \
-         tee >(
-             # Show download progress
-             stdbuf -oL grep --line-buffered -oP '\d+%|\d+[KMG]' | \
-             while read line; do
-                 printf "\r  ${BLUE}Download Progress: %s${NC}" "$line"
-             done
-         ) | \
-         xz -d | \
-         pv -s 25G -N "Writing to disk" | \
-         dd of="$DISK_PATH" bs=4M oflag=direct status=none
+    printf "${YELLOW}  Downloading (xz compressed)...${NC}\n\n"
     
-    if [ $? -eq 0 ]; then
-        printf "\n\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
+    # Get file size for progress bar
+    CONTENT_LENGTH=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
+    
+    if [ -n "$CONTENT_LENGTH" ]; then
+        # Download with progress, decompress, and write
+        wget --no-check-certificate \
+             --progress=bar:force \
+             -O- "$IMAGE_URL" 2>&1 | \
+             stdbuf -oL tr '\r' '\n' | \
+             stdbuf -oL grep --line-buffered '%' | \
+             stdbuf -oL tail -n 1 | \
+             while IFS= read -r line; do
+                 printf "\r  ${BLUE}Progress: %s${NC}" "$line"
+             done &
+        
+        # Actual download and write
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        
+        RESULT=$?
+        wait
+        printf "\n"
     else
-        printf "\n\n  ${RED}✗ Download/write failed${NC}\n"
-        rm -f "$FIFO"
+        # Fallback without size
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        RESULT=$?
+    fi
+    
+    if [ $RESULT -eq 0 ]; then
+        printf "\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
+    else
+        printf "\n  ${RED}✗ Download/write failed${NC}\n"
         exit 1
     fi
 else
     # For .gz compressed images
-    printf "${YELLOW}  [DOWNLOAD] Fetching image...${NC}\n"
-    wget --no-check-certificate \
-         --progress=bar:force:noscroll \
-         --show-progress \
-         -O- "$IMAGE_URL" 2>&1 | \
-         tee >(
-             # Show download progress
-             stdbuf -oL grep --line-buffered -oP '\d+%|\d+[KMG]' | \
-             while read line; do
-                 printf "\r  ${BLUE}Download Progress: %s${NC}" "$line"
-             done
-         ) | \
-         gunzip | \
-         pv -s 25G -N "Writing to disk" | \
-         dd of="$DISK_PATH" bs=4M oflag=direct status=none
+    printf "${YELLOW}  Downloading (gzip compressed)...${NC}\n\n"
     
-    if [ $? -eq 0 ]; then
-        printf "\n\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
+    # Get file size for progress bar
+    CONTENT_LENGTH=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
+    
+    if [ -n "$CONTENT_LENGTH" ]; then
+        # Show download progress in background
+        wget --no-check-certificate \
+             --progress=bar:force \
+             -O- "$IMAGE_URL" 2>&1 | \
+             stdbuf -oL tr '\r' '\n' | \
+             stdbuf -oL grep --line-buffered '%' | \
+             stdbuf -oL tail -n 1 | \
+             while IFS= read -r line; do
+                 printf "\r  ${BLUE}Progress: %s${NC}" "$line"
+             done &
+        
+        # Actual download and write
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        
+        RESULT=$?
+        wait
+        printf "\n"
     else
-        printf "\n\n  ${RED}✗ Download/write failed${NC}\n"
-        rm -f "$FIFO"
+        # Fallback without size
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        RESULT=$?
+    fi
+    
+    if [ $RESULT -eq 0 ]; then
+        printf "\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
+    else
+        printf "\n  ${RED}✗ Download/write failed${NC}\n"
         exit 1
     fi
 fi
-
-# Cleanup
-rm -f "$FIFO"
 
 # Sync to ensure all data is written
 printf "\n${GREEN}[6/6] Finalizing installation...${NC}\n"
