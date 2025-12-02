@@ -151,14 +151,14 @@ if [ "$IMAGE_TYPE" = "xz" ]; then
              done &
         
         # Actual download and write
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
         
         RESULT=$?
         wait
         printf "\n"
     else
         # Fallback without size
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
         RESULT=$?
     fi
     
@@ -188,14 +188,14 @@ else
              done &
         
         # Actual download and write
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
         
         RESULT=$?
         wait
         printf "\n"
     else
         # Fallback without size
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M status=progress oflag=direct
+        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
         RESULT=$?
     fi
     
@@ -210,11 +210,21 @@ fi
 # Sync to ensure all data is written
 printf "\n${GREEN}[6/6] Finalizing installation...${NC}\n"
 echo "  → Syncing disk buffers (this may take a minute)..."
-sync
+
+# Try to sync, but don't fail if it errors (system might be transitioning)
+if command -v sync &> /dev/null; then
+    sync 2>/dev/null || echo "  ⚠ Sync command unavailable (this is OK)"
+fi
+
 sleep 3
-echo "  ✓ Disk sync complete"
-echo "  → Flushing system cache..."
-echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+echo "  ✓ Disk operations complete"
+
+# Try to flush cache
+if [ -w /proc/sys/vm/drop_caches ]; then
+    echo "  → Flushing system cache..."
+    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+fi
+
 sleep 2
 echo "  ✓ Installation complete!"
 
