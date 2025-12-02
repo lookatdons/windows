@@ -68,7 +68,42 @@ for i in {15..1}; do
 done
 printf "\n\n"
 
-printf "${GREEN}[1/6] Detecting system configuration...${NC}\n"
+printf "${GREEN}[1/7] Checking boot mode compatibility...${NC}\n"
+
+# Detect boot mode (UEFI or Legacy BIOS)
+if [ -d /sys/firmware/efi ]; then
+    BOOT_MODE="UEFI"
+    echo "  ✓ Boot mode: UEFI"
+    
+    # Warn if using BIOS image on UEFI system
+    if [ "$USE_SOURCE" = "1" ]; then
+        printf "${YELLOW}  ⚠ WARNING: TeddyVPS image may not work on UEFI systems${NC}\n"
+        printf "${YELLOW}  ⚠ Consider using option 2 (Lamp.sh UEFI) instead${NC}\n"
+        printf "${YELLOW}  Continue anyway? (y/N): ${NC}"
+        read -r CONTINUE
+        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+            echo "  Installation cancelled. Run with option 2: bash $0 2"
+            exit 0
+        fi
+    fi
+else
+    BOOT_MODE="Legacy BIOS"
+    echo "  ✓ Boot mode: Legacy BIOS"
+    
+    # Warn if using UEFI image on BIOS system
+    if [ "$USE_SOURCE" = "2" ]; then
+        printf "${YELLOW}  ⚠ WARNING: Lamp.sh UEFI image may not boot on Legacy BIOS systems${NC}\n"
+        printf "${YELLOW}  ⚠ Consider using option 1 (TeddyVPS) instead${NC}\n"
+        printf "${YELLOW}  Continue anyway? (y/N): ${NC}"
+        read -r CONTINUE
+        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+            echo "  Installation cancelled. Run with option 1: bash $0 1"
+            exit 0
+        fi
+    fi
+fi
+
+printf "\n${GREEN}[2/7] Detecting system configuration...${NC}\n"
 
 # Detect network interface
 INTERFACE=$(ip route | grep default | awk '{print $5}' | head -n1)
@@ -80,7 +115,7 @@ echo "  ✓ Network Interface: $INTERFACE"
 echo "  ✓ IP Address: $IPADDR/$NETMASK"
 echo "  ✓ Gateway: $GATEWAY"
 
-printf "\n${GREEN}[2/6] Installing required packages...${NC}\n"
+printf "\n${GREEN}[3/7] Installing required packages...${NC}\n"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq > /dev/null 2>&1
 
@@ -92,7 +127,7 @@ else
     echo "  ✓ Packages installed (wget, curl, gzip, pv)"
 fi
 
-printf "\n${GREEN}[3/6] Detecting target disk...${NC}\n"
+printf "\n${GREEN}[4/7] Detecting target disk...${NC}\n"
 
 # Detect primary disk
 DISK=$(lsblk -ndo NAME,TYPE | grep disk | head -n1 | awk '{print $1}')
@@ -106,7 +141,7 @@ printf "\n${YELLOW}About to write to %s - This will destroy all data!${NC}\n" "$
 printf "${YELLOW}Press CTRL+C within 5 seconds to cancel...${NC}\n"
 sleep 5
 
-printf "\n${GREEN}[4/6] Testing image URL...${NC}\n"
+printf "\n${GREEN}[5/7] Testing image URL...${NC}\n"
 echo "  → Checking: $IMAGE_URL"
 if curl -sI "$IMAGE_URL" | grep -q "200"; then
     FILE_SIZE=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
@@ -122,7 +157,7 @@ else
     exit 1
 fi
 
-printf "\n${GREEN}[5/6] Downloading and writing Windows image...${NC}\n"
+printf "\n${GREEN}[6/7] Downloading and writing Windows image...${NC}\n"
 printf "${BLUE}Download size: %s${NC}\n" "$IMAGE_SIZE"
 printf "${BLUE}Estimated time: 10-40 minutes (depends on connection)${NC}\n"
 printf "${BLUE}Source: %s${NC}\n\n" "$IMAGE_URL"
@@ -208,7 +243,7 @@ else
 fi
 
 # Sync to ensure all data is written
-printf "\n${GREEN}[6/6] Finalizing installation...${NC}\n"
+printf "\n${GREEN}[7/7] Finalizing installation...${NC}\n"
 echo "  → Syncing disk buffers (this may take a minute)..."
 
 # Try to sync, but don't fail if it errors (system might be transitioning)
