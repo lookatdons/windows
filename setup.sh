@@ -19,12 +19,15 @@ NC='\033[0m' # No Color
 USE_SOURCE="${1:-1}"  # Pass 1 or 2 as argument, default is 1
 
 if [ "$USE_SOURCE" = "1" ]; then
-    IMAGE_URL="https://eu2.vpssh.xyz/Windows_Server_2022_VirtIO_Intel.gz"
+    # Google Drive - extract file ID and convert to direct download link
+    GDRIVE_ID="1cu9ksO3YRfz-hUU5rB09fjPeJ8WITb6y"
+    IMAGE_URL="https://drive.usercontent.google.com/download?id=${GDRIVE_ID}&export=download&confirm=t"
     IMAGE_TYPE="gz"
-    IMAGE_NAME="VPSSH Windows Server 2022 VirtIO"
+    IMAGE_NAME="VPSSH Windows Server 2022 VirtIO (Google Drive)"
     IMAGE_SIZE="~4-5 GB"
     DEFAULT_USER="Administrator"
     DEFAULT_PASS="(Check image documentation)"
+    IS_GDRIVE=1
 elif [ "$USE_SOURCE" = "2" ]; then
     IMAGE_URL="https://fr1.teddyvps.com/iso/en-us_win2022.gz"
     IMAGE_TYPE="gz"
@@ -32,6 +35,7 @@ elif [ "$USE_SOURCE" = "2" ]; then
     IMAGE_SIZE="5.1 GB"
     DEFAULT_USER="Administrator"
     DEFAULT_PASS="Teddysun.com"
+    IS_GDRIVE=0
 elif [ "$USE_SOURCE" = "3" ]; then
     IMAGE_URL="https://dl.lamp.sh/vhd/en-us_win2022_uefi.xz"
     IMAGE_TYPE="xz"
@@ -39,9 +43,10 @@ elif [ "$USE_SOURCE" = "3" ]; then
     IMAGE_SIZE="3.1 GB"
     DEFAULT_USER="Administrator"
     DEFAULT_PASS="Teddysun.com"
+    IS_GDRIVE=0
 else
     printf "${RED}Invalid source. Usage:${NC}\n"
-    printf "  bash $0 1  ${GREEN}# VPSSH VirtIO (Recommended for KVM/Upcloud)${NC}\n"
+    printf "  bash $0 1  ${GREEN}# VPSSH VirtIO from Google Drive (Recommended)${NC}\n"
     printf "  bash $0 2  ${GREEN}# TeddyVPS (5.1 GB)${NC}\n"
     printf "  bash $0 3  ${GREEN}# Lamp.sh (3.1 GB, UEFI only)${NC}\n"
     exit 1
@@ -151,18 +156,26 @@ sleep 5
 
 printf "\n${GREEN}[5/7] Testing image URL...${NC}\n"
 echo "  → Checking: $IMAGE_URL"
-if curl -sI "$IMAGE_URL" | grep -q "200"; then
-    FILE_SIZE=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
-    if [ -n "$FILE_SIZE" ]; then
-        FILE_SIZE_MB=$((FILE_SIZE / 1024 / 1024))
-        echo "  ✓ Image URL is accessible"
-        echo "  ✓ File size: ${FILE_SIZE_MB} MB"
-    else
-        echo "  ✓ Image URL is accessible"
-    fi
+
+if [ "$IS_GDRIVE" -eq 1 ]; then
+    echo "  ℹ Source: Google Drive"
+    echo "  ℹ Note: Large files may require confirmation"
+    # Google Drive doesn't return proper headers, so just proceed
+    echo "  ✓ Google Drive link configured"
 else
-    printf "${RED}  ✗ Cannot access image URL${NC}\n"
-    exit 1
+    if curl -sI "$IMAGE_URL" | grep -q "200"; then
+        FILE_SIZE=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
+        if [ -n "$FILE_SIZE" ]; then
+            FILE_SIZE_MB=$((FILE_SIZE / 1024 / 1024))
+            echo "  ✓ Image URL is accessible"
+            echo "  ✓ File size: ${FILE_SIZE_MB} MB"
+        else
+            echo "  ✓ Image URL is accessible"
+        fi
+    else
+        printf "${RED}  ✗ Cannot access image URL${NC}\n"
+        exit 1
+    fi
 fi
 
 printf "\n${GREEN}[6/7] Downloading and writing Windows image...${NC}\n"
