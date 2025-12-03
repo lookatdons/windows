@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Windows Server 2022 Auto-Installer Script
-# Usage: bash setup.sh [1|2]
-#   1 = TeddyVPS (5.1 GB, default)
-#   2 = Lamp.sh (3.1 GB, faster)
+# Windows Server Auto-Installer Script
+# Usage: bash setup.sh [2022|2025]
+#   2022 = Windows Server 2022 (default)
+#   2025 = Windows Server 2025
 # WARNING: This will WIPE your entire disk and install Windows
 
 set -e
@@ -15,48 +15,36 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration - Choose your image source
-USE_SOURCE="${1:-1}"  # Pass 1 or 2 as argument, default is 1
+# Configuration - Choose Windows version
+WIN_VERSION="${1:-2022}"
 
-if [ "$USE_SOURCE" = "1" ]; then
-    # Google Drive - extract file ID and convert to direct download link
-    GDRIVE_ID="1cu9ksO3YRfz-hUU5rB09fjPeJ8WITb6y"
-    IMAGE_URL="https://drive.usercontent.google.com/download?id=${GDRIVE_ID}&export=download&confirm=t"
-    IMAGE_TYPE="gz"
-    IMAGE_NAME="VPSSH Windows Server 2022 VirtIO (Google Drive)"
+if [ "$WIN_VERSION" = "2022" ]; then
+    IMAGE_URL="https://trading.dons.ovh/Windows_Server_2022_VirtIO_Intel.gz"
+    IMAGE_NAME="Windows Server 2022 VirtIO"
     IMAGE_SIZE="~4-5 GB"
     DEFAULT_USER="Administrator"
-    DEFAULT_PASS="(Check image documentation)"
-    IS_GDRIVE=1
-elif [ "$USE_SOURCE" = "2" ]; then
-    IMAGE_URL="https://fr1.teddyvps.com/iso/en-us_win2022.gz"
-    IMAGE_TYPE="gz"
-    IMAGE_NAME="TeddyVPS Windows Server 2022"
-    IMAGE_SIZE="5.1 GB"
+    DEFAULT_PASS="(Check documentation or try common defaults)"
+elif [ "$WIN_VERSION" = "2025" ]; then
+    IMAGE_URL="https://trading.dons.ovh/Windows_Server_2025_VirtIO_Intel.gz"
+    IMAGE_NAME="Windows Server 2025 VirtIO"
+    IMAGE_SIZE="~4-5 GB"
     DEFAULT_USER="Administrator"
-    DEFAULT_PASS="Teddysun.com"
-    IS_GDRIVE=0
-elif [ "$USE_SOURCE" = "3" ]; then
-    IMAGE_URL="https://dl.lamp.sh/vhd/en-us_win2022_uefi.xz"
-    IMAGE_TYPE="xz"
-    IMAGE_NAME="Lamp.sh Windows Server 2022 UEFI"
-    IMAGE_SIZE="3.1 GB"
-    DEFAULT_USER="Administrator"
-    DEFAULT_PASS="Teddysun.com"
-    IS_GDRIVE=0
+    DEFAULT_PASS="(Check documentation or try common defaults)"
 else
-    printf "${RED}Invalid source. Usage:${NC}\n"
-    printf "  bash $0 1  ${GREEN}# VPSSH VirtIO from Google Drive (Recommended)${NC}\n"
-    printf "  bash $0 2  ${GREEN}# TeddyVPS (5.1 GB)${NC}\n"
-    printf "  bash $0 3  ${GREEN}# Lamp.sh (3.1 GB, UEFI only)${NC}\n"
+    printf "${RED}Invalid Windows version. Usage:${NC}\n"
+    printf "  bash $0 2022  ${GREEN}# Install Windows Server 2022 (default)${NC}\n"
+    printf "  bash $0 2025  ${GREEN}# Install Windows Server 2025${NC}\n"
     exit 1
 fi
 
-printf "${BLUE}================================${NC}\n"
-printf "${BLUE}Windows Server 2022 Installer${NC}\n"
-printf "${BLUE}================================${NC}\n"
-printf "${GREEN}Selected: %s${NC}\n" "$IMAGE_NAME"
+IMAGE_TYPE="gz"
+
+printf "${BLUE}════════════════════════════════${NC}\n"
+printf "${BLUE}  Windows Server Installer${NC}\n"
+printf "${BLUE}════════════════════════════════${NC}\n"
+printf "${GREEN}Version: %s${NC}\n" "$IMAGE_NAME"
 printf "${GREEN}Size: %s${NC}\n" "$IMAGE_SIZE"
+printf "${GREEN}Source: trading.dons.ovh${NC}\n"
 echo ""
 
 # Check if running as root
@@ -68,9 +56,9 @@ fi
 # Display warning
 printf "${RED}⚠️  WARNING ⚠️${NC}\n"
 printf "${YELLOW}This script will:${NC}\n"
-printf "${YELLOW}- COMPLETELY WIPE your current Ubuntu system${NC}\n"
-printf "${YELLOW}- Install Windows Server 2022${NC}\n"
-printf "${YELLOW}- All current data will be PERMANENTLY DELETED${NC}\n"
+printf "${YELLOW}- COMPLETELY WIPE your current system${NC}\n"
+printf "${YELLOW}- Install %s${NC}\n" "$IMAGE_NAME"
+printf "${YELLOW}- ALL data will be PERMANENTLY DELETED${NC}\n"
 echo ""
 printf "Press ${GREEN}CTRL+C${NC} within 15 seconds to cancel...\n"
 echo ""
@@ -87,33 +75,11 @@ printf "${GREEN}[1/7] Checking boot mode compatibility...${NC}\n"
 if [ -d /sys/firmware/efi ]; then
     BOOT_MODE="UEFI"
     echo "  ✓ Boot mode: UEFI"
-    
-    # Warn if using BIOS image on UEFI system
-    if [ "$USE_SOURCE" = "2" ]; then
-        printf "${YELLOW}  ⚠ WARNING: TeddyVPS image may not work on UEFI systems${NC}\n"
-        printf "${YELLOW}  ⚠ Consider using option 3 (Lamp.sh UEFI) instead${NC}\n"
-        printf "${YELLOW}  Continue anyway? (y/N): ${NC}"
-        read -r CONTINUE
-        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-            echo "  Installation cancelled. Run with option 3: bash $0 3"
-            exit 0
-        fi
-    fi
+    echo "  ℹ VirtIO image supports both UEFI and Legacy BIOS"
 else
     BOOT_MODE="Legacy BIOS"
     echo "  ✓ Boot mode: Legacy BIOS"
-    
-    # Warn if using UEFI image on BIOS system
-    if [ "$USE_SOURCE" = "3" ]; then
-        printf "${YELLOW}  ⚠ WARNING: Lamp.sh UEFI image may not boot on Legacy BIOS systems${NC}\n"
-        printf "${YELLOW}  ⚠ Consider using option 2 (TeddyVPS) instead${NC}\n"
-        printf "${YELLOW}  Continue anyway? (y/N): ${NC}"
-        read -r CONTINUE
-        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-            echo "  Installation cancelled. Run with option 2: bash $0 2"
-            exit 0
-        fi
-    fi
+    echo "  ℹ VirtIO image supports both UEFI and Legacy BIOS"
 fi
 
 printf "\n${GREEN}[2/7] Detecting system configuration...${NC}\n"
@@ -131,14 +97,8 @@ echo "  ✓ Gateway: $GATEWAY"
 printf "\n${GREEN}[3/7] Installing required packages...${NC}\n"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq > /dev/null 2>&1
-
-if [ "$IMAGE_TYPE" = "xz" ]; then
-    apt-get install -y wget curl xz-utils pv > /dev/null 2>&1
-    echo "  ✓ Packages installed (wget, curl, xz-utils, pv)"
-else
-    apt-get install -y wget curl gzip pv > /dev/null 2>&1
-    echo "  ✓ Packages installed (wget, curl, gzip, pv)"
-fi
+apt-get install -y wget curl gzip > /dev/null 2>&1
+echo "  ✓ Packages installed (wget, curl, gzip)"
 
 printf "\n${GREEN}[4/7] Detecting target disk...${NC}\n"
 
@@ -157,25 +117,19 @@ sleep 5
 printf "\n${GREEN}[5/7] Testing image URL...${NC}\n"
 echo "  → Checking: $IMAGE_URL"
 
-if [ "$IS_GDRIVE" -eq 1 ]; then
-    echo "  ℹ Source: Google Drive"
-    echo "  ℹ Note: Large files may require confirmation"
-    # Google Drive doesn't return proper headers, so just proceed
-    echo "  ✓ Google Drive link configured"
-else
-    if curl -sI "$IMAGE_URL" | grep -q "200"; then
-        FILE_SIZE=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
-        if [ -n "$FILE_SIZE" ]; then
-            FILE_SIZE_MB=$((FILE_SIZE / 1024 / 1024))
-            echo "  ✓ Image URL is accessible"
-            echo "  ✓ File size: ${FILE_SIZE_MB} MB"
-        else
-            echo "  ✓ Image URL is accessible"
-        fi
+if curl -sI "$IMAGE_URL" | grep -q "200"; then
+    FILE_SIZE=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
+    if [ -n "$FILE_SIZE" ]; then
+        FILE_SIZE_MB=$((FILE_SIZE / 1024 / 1024))
+        echo "  ✓ Image URL is accessible"
+        echo "  ✓ File size: ${FILE_SIZE_MB} MB"
     else
-        printf "${RED}  ✗ Cannot access image URL${NC}\n"
-        exit 1
+        echo "  ✓ Image URL is accessible"
     fi
+else
+    printf "${RED}  ✗ Cannot access image URL${NC}\n"
+    printf "${RED}  Please check your internet connection or try again later${NC}\n"
+    exit 1
 fi
 
 printf "\n${GREEN}[6/7] Downloading and writing Windows image...${NC}\n"
@@ -187,80 +141,40 @@ printf "${BLUE}Source: %s${NC}\n\n" "$IMAGE_URL"
 echo "  → Starting download and disk write..."
 echo ""
 
-if [ "$IMAGE_TYPE" = "xz" ]; then
-    # For .xz compressed images
-    printf "${YELLOW}  Downloading (xz compressed)...${NC}\n\n"
+printf "${YELLOW}  Downloading (gzip compressed)...${NC}\n\n"
+
+# Get file size for progress bar
+CONTENT_LENGTH=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
+
+if [ -n "$CONTENT_LENGTH" ]; then
+    # Show download progress in background
+    wget --no-check-certificate \
+         --progress=bar:force \
+         -O- "$IMAGE_URL" 2>&1 | \
+         stdbuf -oL tr '\r' '\n' | \
+         stdbuf -oL grep --line-buffered '%' | \
+         stdbuf -oL tail -n 1 | \
+         while IFS= read -r line; do
+             printf "\r  ${BLUE}Progress: %s${NC}" "$line"
+         done &
     
-    # Get file size for progress bar
-    CONTENT_LENGTH=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
+    # Actual download and write
+    wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
     
-    if [ -n "$CONTENT_LENGTH" ]; then
-        # Download with progress, decompress, and write
-        wget --no-check-certificate \
-             --progress=bar:force \
-             -O- "$IMAGE_URL" 2>&1 | \
-             stdbuf -oL tr '\r' '\n' | \
-             stdbuf -oL grep --line-buffered '%' | \
-             stdbuf -oL tail -n 1 | \
-             while IFS= read -r line; do
-                 printf "\r  ${BLUE}Progress: %s${NC}" "$line"
-             done &
-        
-        # Actual download and write
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
-        
-        RESULT=$?
-        wait
-        printf "\n"
-    else
-        # Fallback without size
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | xz -d | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
-        RESULT=$?
-    fi
-    
-    if [ $RESULT -eq 0 ]; then
-        printf "\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
-    else
-        printf "\n  ${RED}✗ Download/write failed${NC}\n"
-        exit 1
-    fi
+    RESULT=$?
+    wait
+    printf "\n"
 else
-    # For .gz compressed images
-    printf "${YELLOW}  Downloading (gzip compressed)...${NC}\n\n"
-    
-    # Get file size for progress bar
-    CONTENT_LENGTH=$(curl -sI "$IMAGE_URL" | grep -i content-length | awk '{print $2}' | tr -d '\r')
-    
-    if [ -n "$CONTENT_LENGTH" ]; then
-        # Show download progress in background
-        wget --no-check-certificate \
-             --progress=bar:force \
-             -O- "$IMAGE_URL" 2>&1 | \
-             stdbuf -oL tr '\r' '\n' | \
-             stdbuf -oL grep --line-buffered '%' | \
-             stdbuf -oL tail -n 1 | \
-             while IFS= read -r line; do
-                 printf "\r  ${BLUE}Progress: %s${NC}" "$line"
-             done &
-        
-        # Actual download and write
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
-        
-        RESULT=$?
-        wait
-        printf "\n"
-    else
-        # Fallback without size
-        wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
-        RESULT=$?
-    fi
-    
-    if [ $RESULT -eq 0 ]; then
-        printf "\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
-    else
-        printf "\n  ${RED}✗ Download/write failed${NC}\n"
-        exit 1
-    fi
+    # Fallback without size
+    wget --no-check-certificate -q -O- "$IMAGE_URL" | gunzip | dd of="$DISK_PATH" bs=4M iflag=fullblock status=progress oflag=direct
+    RESULT=$?
+fi
+
+if [ $RESULT -eq 0 ]; then
+    printf "\n  ${GREEN}✓ Image downloaded and written successfully${NC}\n"
+else
+    printf "\n  ${RED}✗ Download/write failed${NC}\n"
+    exit 1
 fi
 
 # Sync to ensure all data is written
@@ -285,9 +199,9 @@ sleep 2
 echo "  ✓ Installation complete!"
 
 echo ""
-printf "${BLUE}================================${NC}\n"
-printf "${GREEN}✓ Windows Server 2022 Installed${NC}\n"
-printf "${BLUE}================================${NC}\n"
+printf "${BLUE}════════════════════════════════${NC}\n"
+printf "${GREEN}✓ %s Installed${NC}\n" "$IMAGE_NAME"
+printf "${BLUE}════════════════════════════════${NC}\n"
 echo ""
 printf "${YELLOW}Connection Information:${NC}\n"
 printf "  • IP Address: ${GREEN}%s${NC}\n" "$IPADDR"
@@ -302,22 +216,23 @@ echo "  3. Wait 5-10 minutes for Windows first boot"
 echo "  4. Connect via RDP client:"
 printf "     ${GREEN}mstsc /v:%s${NC} (Windows)\n" "$IPADDR"
 printf "     ${GREEN}xfreerdp /v:%s /u:%s${NC} (Linux)\n" "$IPADDR" "$DEFAULT_USER"
-echo "  5. Login with credentials above"
+echo "  5. Login with Administrator credentials"
 echo ""
 printf "${RED}═══════════════════════════════${NC}\n"
 printf "${RED}  CRITICAL SECURITY WARNING${NC}\n"
 printf "${RED}═══════════════════════════════${NC}\n"
 printf "  ${RED}• CHANGE PASSWORD IMMEDIATELY!${NC}\n"
-printf "  ${RED}• Default password is PUBLIC${NC}\n"
+printf "  ${RED}• Default passwords may be PUBLIC${NC}\n"
 printf "  ${RED}• Your server WILL BE HACKED${NC}\n"
 printf "  ${RED}  if you don't change it!${NC}\n"
 printf "${RED}═══════════════════════════════${NC}\n"
 echo ""
 printf "${YELLOW}Troubleshooting:${NC}\n"
 echo "  • Can't connect after 10 mins?"
-echo "    → Check Upcloud VNC console"
-echo "    → Test: nmap -p 3389 $IPADDR"
+echo "    → Check console via Upcloud VNC"
+echo "    → Test port: nmap -p 3389 $IPADDR"
 echo "    → Wait longer (first boot takes time)"
+echo "  • VirtIO drivers included for KVM/QEMU"
 echo ""
 
 # Countdown to reboot
@@ -332,5 +247,5 @@ printf "${GREEN}Initiating system reboot...${NC}\n"
 sleep 2
 
 # Force reboot
-sync
+sync 2>/dev/null || true
 reboot -f
