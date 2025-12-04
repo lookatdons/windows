@@ -179,25 +179,8 @@ fi
 
 # Sync to ensure all data is written
 printf "\n${GREEN}[7/7] Finalizing installation...${NC}\n"
-echo "  → Syncing disk buffers (this may take a minute)..."
 
-# Try to sync, but don't fail if it errors (system might be transitioning)
-if command -v sync &> /dev/null; then
-    sync 2>/dev/null || echo "  ⚠ Sync command unavailable (this is OK)"
-fi
-
-sleep 3
-echo "  ✓ Disk operations complete"
-
-# Try to flush cache
-if [ -w /proc/sys/vm/drop_caches ]; then
-    echo "  → Flushing system cache..."
-    echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
-fi
-
-sleep 2
-echo "  ✓ Installation complete!"
-
+# Print info BEFORE system gets corrupted
 echo ""
 printf "${BLUE}════════════════════════════════${NC}\n"
 printf "${GREEN}✓ %s Installed${NC}\n" "$IMAGE_NAME"
@@ -210,42 +193,22 @@ printf "  • Username: ${GREEN}%s${NC}\n" "$DEFAULT_USER"
 printf "  • Password: ${GREEN}%s${NC}\n" "$DEFAULT_PASS"
 echo ""
 printf "${YELLOW}Next Steps:${NC}\n"
-echo "  1. System will reboot in 10 seconds"
+echo "  1. System will reboot in 5 seconds"
 echo "  2. SSH connection will be LOST"
 echo "  3. Wait 5-10 minutes for Windows first boot"
-echo "  4. Connect via RDP client:"
-printf "     ${GREEN}mstsc /v:%s${NC} (Windows)\n" "$IPADDR"
-printf "     ${GREEN}xfreerdp /v:%s /u:%s${NC} (Linux)\n" "$IPADDR" "$DEFAULT_USER"
-echo "  5. Login with Administrator credentials"
+echo "  4. Connect via RDP to: $IPADDR"
 echo ""
-printf "${RED}═══════════════════════════════${NC}\n"
-printf "${RED}  CRITICAL SECURITY WARNING${NC}\n"
-printf "${RED}═══════════════════════════════${NC}\n"
-printf "  ${RED}• CHANGE PASSWORD IMMEDIATELY!${NC}\n"
-printf "  ${RED}• Default passwords may be PUBLIC${NC}\n"
-printf "  ${RED}• Your server WILL BE HACKED${NC}\n"
-printf "  ${RED}  if you don't change it!${NC}\n"
-printf "${RED}═══════════════════════════════${NC}\n"
-echo ""
-printf "${YELLOW}Troubleshooting:${NC}\n"
-echo "  • Can't connect after 10 mins?"
-echo "    → Check console via Upcloud VNC"
-echo "    → Test port: nmap -p 3389 $IPADDR"
-echo "    → Wait longer (first boot takes time)"
-echo "  • VirtIO drivers included for KVM/QEMU"
+printf "${RED}CRITICAL: CHANGE PASSWORD IMMEDIATELY!${NC}\n"
 echo ""
 
-# Countdown to reboot
-printf "${YELLOW}Rebooting to Windows in:${NC}\n"
-for i in {10..1}; do
-    printf "\r  ${RED}%d${NC} seconds (CTRL+C to cancel)... " "$i"
-    sleep 1
+# Quick countdown
+printf "${YELLOW}Rebooting to Windows...${NC}\n"
+for i in {5..1}; do
+    printf "\r  Reboot in %d... " "$i"
+    sleep 1 2>/dev/null || break
 done
 
-echo ""
-printf "${GREEN}Initiating system reboot...${NC}\n"
-sleep 2
-
-# Force reboot
+# Force immediate reboot (before system corruption gets worse)
+printf "\n${GREEN}Rebooting now!${NC}\n"
 sync 2>/dev/null || true
-reboot -f
+echo b > /proc/sysrq-trigger 2>/dev/null || reboot -f 2>/dev/null || true
